@@ -1,12 +1,12 @@
 {
-  "name": "aws-sam-local-helper-commands",
+  "name": "aws-sam-helper-commands",
   "description": "A CLI tool to make certain common AWS SAM commands easier to use",
   "version": "0.0.1",
   "author": "Eric Allam",
   "bin": {
     "sam-helper": "./bin/run"
   },
-  "bugs": "https://github.com/solve-hq/aws-sam-local-helper-commands/issues",
+  "bugs": "https://github.com/solve-hq/aws-sam-helper-commands/issues",
   "dependencies": {
     "@oclif/command": "^1",
     "@oclif/config": "^1",
@@ -29,7 +29,7 @@
     "/oclif.manifest.json",
     "/src"
   ],
-  "homepage": "https://github.com/solve-hq/aws-sam-local-helper-commands",
+  "homepage": "https://github.com/solve-hq/aws-sam-helper-commands",
   "keywords": [
     "oclif"
   ],
@@ -42,7 +42,7 @@
       "@oclif/plugin-help"
     ]
   },
-  "repository": "https://github.com/solve-hq/aws-sam-local-helper-commands",
+  "repository": "https://github.com/solve-hq/aws-sam-helper-commands",
   "scripts": {
     "postpack": "rm -f oclif.manifest.json",
     "prepack": "oclif-dev manifest && oclif-dev readme",
