@@ -70,7 +70,11 @@ class Deploy extends Command {
     } else {
       let stacks = await cloudFormation
         .listStacks({
-          StackStatusFilter: ["CREATE_COMPLETE", "UPDATE_COMPLETE"]
+          StackStatusFilter: [
+            "CREATE_COMPLETE",
+            "UPDATE_COMPLETE",
+            "UPDATE_ROLLBACK_COMPLETE"
+          ]
         })
         .promise();
 
