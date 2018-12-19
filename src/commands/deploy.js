@@ -8,14 +8,38 @@ const exec = util.promisify(require("child_process").exec);
 const inquirer = require("inquirer");
 const AWS = require("aws-sdk");
 
-const samPackage = async (bucketName, deployDir) => {
-  return await exec(
-    `sam package --template-file ${deployDir}/template.yml --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml`
-  );
+const YAML = require("yaml");
+const fs = require("fs");
+
+const loadTemplate = deployDir => {
+  const warn = console.warn;
+  console.warn = () => {};
+  const doc = YAML.parse(fs.readFileSync(`${deployDir}/template.yml`, "utf8"));
+  console.warn = warn;
+
+  return doc;
 };
 
-const samDeploy = async (stackName, deployDir) => {
-  const deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM`;
+const samPackage = async (bucketName, deployDir) => {
+  const packageCommand = `sam package --template-file ${deployDir}/template.yml --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml`;
+
+  console.log(`Running ${packageCommand}`);
+
+  return await exec(packageCommand);
+};
+
+const samDeploy = async (stackName, deployDir, parameterOverrides) => {
+  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM`;
+
+  if (parameterOverrides) {
+    const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
+      return `${cmd} ${p.Name}="${p.Value}"`;
+    }, "");
+
+    deployCommand += ` --parameter-overrides ${parameterOverridesPart}`;
+  }
+
+  console.log(`Running ${deployCommand}`);
 
   return await exec(deployCommand);
 };
@@ -42,6 +66,67 @@ class Deploy extends Command {
       );
 
       this.exit();
+    }
+
+    const paramOverrides = [];
+
+    if (flags["override-parameters"]) {
+      const doc = loadTemplate(flags.deployDir);
+
+      const ssm = new AWS.SSM();
+
+      const parameterKeys = Object.keys(doc.Parameters);
+
+      for (let index = 0; index < parameterKeys.length; index++) {
+        const parameterKey = parameterKeys[index];
+        const parameter = doc.Parameters[parameterKey];
+
+        if (parameter.Type.match(/AWS::SSM::Parameter::Value/)) {
+          const searchPath = parameter.Default.split("/")
+            .slice(0, 3)
+            .join("/");
+
+          const parameterChoicesData = await ssm
+            .getParametersByPath({
+              Path: searchPath,
+              Recursive: true
+            })
+            .promise();
+
+          const parameterOptions = parameterChoicesData.Parameters.map(
+            param => param.Name
+          );
+
+          let paramResponse = await inquirer.prompt([
+            {
+              name: "paramOverride",
+              message: `Override "${parameterKey}" param value`,
+              type: "list",
+              choices: parameterOptions,
+              default: parameter.Default
+            }
+          ]);
+
+          paramOverrides.push({
+            Value: paramResponse.paramOverride,
+            Name: parameterKey
+          });
+        } else {
+          let paramResponse = await inquirer.prompt([
+            {
+              name: "paramOverride",
+              message: `Override "${parameterKey}" param value:`,
+              type: "input",
+              default: parameter.Default
+            }
+          ]);
+
+          paramOverrides.push({
+            Value: paramResponse.paramOverride,
+            Name: parameterKey
+          });
+        }
+      }
     }
 
     const cloudFormation = new AWS.CloudFormation();
@@ -158,7 +243,11 @@ class Deploy extends Command {
 
     cli.action.start(`Deploying ${stackName}`);
 
-    const deployResults = await samDeploy(stackName, flags.deployDir);
+    const deployResults = await samDeploy(
+      stackName,
+      flags.deployDir,
+      paramOverrides
+    );
 
     cli.action.stop();
   }
@@ -191,6 +280,13 @@ Deploy.flags = {
       "A pattern to filter s3 buckets when choosing the source code s3 bucket",
     required: false,
     default: "source-code"
+  }),
+  "override-parameters": flags.boolean({
+    char: "p",
+    description:
+      "Set this flag if you'd like to override this stack's parameters on deploy",
+    required: false,
+    default: false
   })
 };
 

@@ -14,7 +14,8 @@
     "inquirer": "^6.2.1",
     "cli-ux": "^4.9.3",
     "aws-sdk": "^2.375.0",
-    "lodash.pick": "^4.4.0"
+    "lodash.pick": "^4.4.0",
+    "yaml": "^1.1.0"
   },
   "devDependencies": {
     "@oclif/dev-cli": "^1",

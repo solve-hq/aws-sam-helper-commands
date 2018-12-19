@@ -24,10 +24,17 @@ Outputs:
       Fn::GetAtt:
       - HelloWorldFunctionRole
       - Arn
+Parameters:
+  ExampleSSMParameter:
+    Default: /Solve/Outputs/ReceiptVerificationService/APIEndpoint
+    Type: AWS::SSM::Parameter::Value<String>
+  ExampleStringParameter:
+    Default: hello World
+    Type: String
 Resources:
   HelloWorldFunction:
     Properties:
-      CodeUri: s3://cms-stack-source-code-eu-west-2/fef2285b098ae56f84aff88453034c47
+      CodeUri: s3://solveless-stack-source-code-eu-west-2/fef2285b098ae56f84aff88453034c47
       Environment:
         Variables:
           PARAM1: VALUE
