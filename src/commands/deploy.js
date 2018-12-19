@@ -31,7 +31,7 @@ const samPackage = async (bucketName, deployDir) => {
 const samDeploy = async (stackName, deployDir, parameterOverrides) => {
   let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM`;
 
-  if (parameterOverrides) {
+  if (parameterOverrides.length > 0) {
     const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
       return `${cmd} ${p.Name}="${p.Value}"`;
     }, "");
