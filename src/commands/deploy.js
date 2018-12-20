@@ -215,7 +215,11 @@ class Deploy extends Command {
       .getBucketLocation({ Bucket: bucketName })
       .promise();
 
-    if (bucketLocationResponse.LocationConstraint != region) {
+    const bucketInRegion = region === "us-east-1"
+      ? bucketLocationResponse.LocationConstraint !== null
+      : bucketLocationResponse.LocationConstraint !== region;
+
+    if (!bucketInRegion) {
       console.error(
         `Bucket ${bucketName} must be in the ${region} region, instead it is in ${
           bucketLocationResponse.LocationConstraint
