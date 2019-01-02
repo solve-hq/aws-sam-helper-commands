@@ -11,17 +11,19 @@ const AWS = require("aws-sdk");
 const YAML = require("yaml");
 const fs = require("fs");
 
-const loadTemplate = deployDir => {
+const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
   console.warn = () => {};
-  const doc = YAML.parse(fs.readFileSync(`${deployDir}/template.yml`, "utf8"));
+  const doc = YAML.parse(
+    fs.readFileSync(`${deployDir}/${templateFile}`, "utf8")
+  );
   console.warn = warn;
 
   return doc;
 };
 
-const samPackage = async (bucketName, deployDir) => {
-  const packageCommand = `sam package --template-file ${deployDir}/template.yml --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml`;
+const samPackage = async (bucketName, deployDir, templateFile) => {
+  const packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml`;
 
   console.log(`Running ${packageCommand}`);
 
@@ -71,7 +73,7 @@ class Deploy extends Command {
     const paramOverrides = [];
 
     if (flags["override-parameters"]) {
-      const doc = loadTemplate(flags.deployDir);
+      const doc = loadTemplate(flags["deploy-dir"], flags.template);
 
       const ssm = new AWS.SSM();
 
@@ -165,8 +167,8 @@ class Deploy extends Command {
 
       const stackOptions = stacks.StackSummaries.filter(
         stack =>
-          !flags.stackFilter ||
-          stack.StackName.match(new RegExp(flags.stackFilter, "i"))
+          !flags["stack-filter"] ||
+          stack.StackName.match(new RegExp(flags["stack-filter"], "i"))
       )
         .sort((a, b) => {
           return (
@@ -195,7 +197,7 @@ class Deploy extends Command {
     const bucketsResponse = await s3.listBuckets().promise();
 
     const bucketOptions = bucketsResponse.Buckets.filter(bucket =>
-      bucket.Name.match(new RegExp(flags.bucketFilter, "i"))
+      bucket.Name.match(new RegExp(flags["bucket-filter"], "i"))
     ).map(bucket => {
       return { name: bucket.Name };
     });
@@ -240,7 +242,11 @@ class Deploy extends Command {
     if (packageResponse.shouldPackage) {
       cli.action.start("Packaging the stack");
 
-      const packageResults = await samPackage(bucketName, flags.deployDir);
+      const packageResults = await samPackage(
+        bucketName,
+        flags["deploy-dir"],
+        flags.template
+      );
 
       cli.action.stop();
     }
@@ -249,7 +255,7 @@ class Deploy extends Command {
 
     const deployResults = await samDeploy(
       stackName,
-      flags.deployDir,
+      flags["deploy-dir"],
       paramOverrides
     );
 
@@ -265,20 +271,27 @@ Deploy.flags = {
     description: "Destination AWS region",
     required: false
   }),
-  deployDir: flags.string({
+  "deploy-dir": flags.string({
     char: "d",
     description:
-      "Path to local deploy directory where the code artifacts and template.yml are located",
+      "Path to local deploy directory where the code artifacts and template file are located",
     required: false,
-    default: "./deploy"
+    default: "./.aws-sam/build"
   }),
-  stackFilter: flags.string({
+  template: flags.string({
+    char: "t",
+    description:
+      "Name of the template to package, located inside the --deploy-dir",
+    required: false,
+    default: "template.yaml"
+  }),
+  "stack-filter": flags.string({
     char: "f",
     description:
       "A pattern to filter stacks when displaying which stack to deploy",
     required: false
   }),
-  bucketFilter: flags.string({
+  "bucket-filter": flags.string({
     char: "b",
     description:
       "A pattern to filter s3 buckets when choosing the source code s3 bucket",
