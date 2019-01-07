@@ -215,7 +215,7 @@ class DeployConfig extends Command {
 
     const doc = loadTemplate(flags["deploy-dir"], flags.template);
 
-    const parameterKeys = Object.keys(doc.Parameters);
+    const parameterKeys = Object.keys(doc.Parameters || {});
 
     for (let index = 0; index < parameterKeys.length; index++) {
       const parameterKey = parameterKeys[index];
