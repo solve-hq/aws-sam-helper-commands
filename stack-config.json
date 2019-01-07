@@ -1,0 +1,29 @@
+{
+  "regions": {
+    "eu-west-2": {
+      "bucket": "example-source-code-4371-eu-west-2"
+    },
+    "eu-west-1": {
+      "bucket": "example-source-code-4371-eu-west-1"
+    }
+  },
+  "stacks": {
+    "sam-app-dev": {
+      "stage": "dev",
+      "parameterOverrides": {
+        "ExampleStringParameter": "FooBar"
+      },
+      "parameters": {
+        "ExampleObjectParam": {
+          "gracePeriodInSeconds": 5,
+          "delay": 5,
+          "loop": 100
+        },
+        "ExampleStringParam": "FooBarBaz"
+      }
+    },
+    "sam-app": {
+      "stage": "dev"
+    }
+  }
+}

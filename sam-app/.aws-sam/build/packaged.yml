@@ -34,7 +34,7 @@ Parameters:
 Resources:
   HelloWorldFunction:
     Properties:
-      CodeUri: s3://solveless-stack-source-code-eu-west-2/fef2285b098ae56f84aff88453034c47
+      CodeUri: s3://example-source-code-4371-eu-west-1/eb9174529703f35900dcfe3255d44be6
       Environment:
         Variables:
           PARAM1: VALUE
