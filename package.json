@@ -1,7 +1,7 @@
 {
   "name": "aws-sam-helper-commands",
   "description": "A CLI tool to make certain common AWS SAM commands easier to use",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Eric Allam",
   "bin": {
     "sam-helper": "./bin/run"
@@ -11,9 +11,9 @@
     "@oclif/command": "^1",
     "@oclif/config": "^1",
     "@oclif/plugin-help": "^2",
-    "inquirer": "^6.2.1",
-    "cli-ux": "^4.9.3",
     "aws-sdk": "^2.375.0",
+    "cli-ux": "^4.9.3",
+    "inquirer": "^6.2.1",
     "lodash.pick": "^4.4.0",
     "yaml": "^1.1.0"
   },
