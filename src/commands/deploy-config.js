@@ -72,7 +72,7 @@ const encodedValue = rawValue => {
   return result;
 };
 
-const configureParam = async (ssm, Name, rawValue, dryRun) => {
+const configureParam = async (ssm, Name, rawValue, dryRun, override) => {
   try {
     const existingParam = await ssm.getParameter({ Name }).promise();
 
@@ -82,6 +82,29 @@ const configureParam = async (ssm, Name, rawValue, dryRun) => {
           rawValue
         )} but instead it is ${existingParam.Parameter.Value}`
       );
+
+      if (override) {
+        let Value;
+
+        if (typeof rawValue == "string") {
+          Value = rawValue;
+        } else {
+          Value = JSON.stringify(rawValue);
+        }
+
+        console.log(`Overriding parameter ${Name} with value ${Value}`);
+
+        if (!dryRun) {
+          return ssm
+            .putParameter({
+              Name,
+              Value,
+              Type: "String",
+              Overwrite: true
+            })
+            .promise();
+        }
+      }
     }
   } catch (error) {
     let Value;
@@ -95,7 +118,7 @@ const configureParam = async (ssm, Name, rawValue, dryRun) => {
     console.log(`Putting parameter ${Name} with value ${Value}`);
 
     if (!dryRun) {
-      await ssm
+      return ssm
         .putParameter({
           Name,
           Value,
@@ -206,7 +229,8 @@ class DeployConfig extends Command {
             ssm,
             Name,
             stackConfig.parameters[Name],
-            flags["dry-run"]
+            flags["dry-run"],
+            flags["override-parameters"]
           )
       );
 
@@ -297,6 +321,13 @@ DeployConfig.flags = {
       "Name of the template to package, located inside the --deploy-dir",
     required: false,
     default: "template.yaml"
+  }),
+  "override-parameters": flags.boolean({
+    char: "p",
+    description:
+      "Override the parameters in Param Store with the parameters defined in the stack config file",
+    required: false,
+    default: false
   }),
   "dry-run": flags.boolean({
     description: "View the output of the command without making any changes",

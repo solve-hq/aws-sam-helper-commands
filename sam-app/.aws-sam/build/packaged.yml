@@ -34,7 +34,7 @@ Parameters:
 Resources:
   HelloWorldFunction:
     Properties:
-      CodeUri: s3://example-source-code-4371-eu-west-1/eb9174529703f35900dcfe3255d44be6
+      CodeUri: s3://example-source-code-4371-eu-west-2/c2805eec7e545e8042199e952271e934
       Environment:
         Variables:
           PARAM1: VALUE
