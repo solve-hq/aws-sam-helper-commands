@@ -22,16 +22,16 @@ const loadTemplate = (deployDir, templateFile) => {
   return doc;
 };
 
-const samPackage = async (bucketName, deployDir, templateFile) => {
-  const packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml`;
+const samPackage = async (bucketName, deployDir, templateFile, region) => {
+  const packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml --region ${region}`;
 
   console.log(`Running ${packageCommand}`);
 
   return await exec(packageCommand);
 };
 
-const samDeploy = async (stackName, deployDir, parameterOverrides) => {
-  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM`;
+const samDeploy = async (stackName, deployDir, parameterOverrides, region) => {
+  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM --region ${region}`;
 
   if (parameterOverrides.length > 0) {
     const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
@@ -246,7 +246,8 @@ class Deploy extends Command {
       const packageResults = await samPackage(
         bucketName,
         flags["deploy-dir"],
-        flags.template
+        flags.template,
+        region
       );
 
       cli.action.stop();
@@ -257,7 +258,8 @@ class Deploy extends Command {
     const deployResults = await samDeploy(
       stackName,
       flags["deploy-dir"],
-      paramOverrides
+      paramOverrides,
+      region
     );
 
     cli.action.stop();
