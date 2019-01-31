@@ -25,6 +25,52 @@ Lookup help using the `--help` flag like so:
 $ npx sam-helper deploy --help
 ```
 
+## Deploy Config
+
+The `deploy-config` command allows a service to define stacks and their configuration in a local `stack-config.json` file.
+
+An example config file that defines a stack that supports three different regions:
+
+```json
+{
+  "regions": {
+    "eu-west-2": {
+      "bucket": "source-code-eu-west-2"
+    },
+    "us-west-2": {
+      "bucket": "source-code-us-west-2"
+    },
+    "ap-southeast-2": {
+      "bucket": "source-code-ap-southeast-2"
+    }
+  },
+  "secrets": {
+    "FunctionShield": {
+      "token": "1234"
+    }
+  },
+  "stacks": {
+    "rest-api": {
+      "stage": "dev",
+      "parameters": {
+        "/Services/RestAPI/Config": {
+          "dynamodb": {
+            "params": { "TableName": "rest-api-table" }
+          },
+          "logLevel": "DEBUG"
+        }
+      }
+    }
+  }
+}
+```
+
+You can deploy the above `rest-api` stack in any of the above regions using the `deploy-config` command, like this:
+
+```bash
+$ npx sam-helper deploy-config -n rest-api -r us-west-2
+```
+
 ## Read Stream
 
 A very simple DynamoDB stream consumer that reads from all shards and prints events to STDOUT

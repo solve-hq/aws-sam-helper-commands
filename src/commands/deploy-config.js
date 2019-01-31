@@ -9,6 +9,8 @@ const AWS = require("aws-sdk");
 const fs = require("fs");
 const YAML = require("yaml");
 
+const isEqual = require("lodash.isequal");
+
 const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
   console.warn = () => {};
@@ -260,6 +262,44 @@ class DeployConfig extends Command {
           this.exit();
         }
       }
+    }
+
+    if (config.secrets) {
+      const secretsManager = new AWS.SecretsManager({ region: region });
+
+      const allSecrets = Object.keys(config.secrets).map(async name => {
+        const secretValue = config.secrets[name];
+
+        try {
+          const existingSecret = await secretsManager
+            .getSecretValue({ SecretId: name })
+            .promise();
+
+          const existingSecretValue = JSON.parse(existingSecret.SecretString);
+
+          if (!isEqual(existingSecretValue, secretValue)) {
+            console.log(`Updating SecretString value for ${name}...`);
+
+            return secretsManager
+              .putSecretValue({
+                SecretId: name,
+                SecretString: JSON.stringify(secretValue)
+              })
+              .promise();
+          }
+        } catch (error) {
+          console.log(`Creating SecretString ${name}...`);
+
+          return secretsManager
+            .createSecret({
+              Name: name,
+              SecretString: JSON.stringify(secretValue)
+            })
+            .promise();
+        }
+      });
+
+      await Promise.all(allSecrets).catch(console.error);
     }
 
     console.log(`Deploying in ${region}...`);
