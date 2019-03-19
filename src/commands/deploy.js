@@ -22,16 +22,32 @@ const loadTemplate = (deployDir, templateFile) => {
   return doc;
 };
 
-const samPackage = async (bucketName, deployDir, templateFile, region) => {
-  const packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml --region ${region}`;
+const samPackage = async (
+  bucketName,
+  deployDir,
+  templateFile,
+  region,
+  profile
+) => {
+  let packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml --region ${region}`;
+
+  if (profile) {
+    packageCommand += ` --profile ${profile}`;
+  }
 
   console.log(`Running ${packageCommand}`);
 
   return await exec(packageCommand);
 };
 
-const samDeploy = async (stackName, deployDir, parameterOverrides, region) => {
-  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM --region ${region}`;
+const samDeploy = async (
+  stackName,
+  deployDir,
+  parameterOverrides,
+  region,
+  profile
+) => {
+  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM  --region ${region}`;
 
   if (parameterOverrides.length > 0) {
     const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
@@ -39,6 +55,10 @@ const samDeploy = async (stackName, deployDir, parameterOverrides, region) => {
     }, "");
 
     deployCommand += ` --parameter-overrides ${parameterOverridesPart}`;
+  }
+
+  if (profile) {
+    deployCommand += ` --profile ${profile}`;
   }
 
   console.log(`Running ${deployCommand}`);
@@ -68,6 +88,16 @@ class Deploy extends Command {
       );
 
       this.exit();
+    }
+
+    if (flags.profile) {
+      console.log(`Using AWS profile ${flags.profile}`);
+
+      const credentials = new AWS.SharedIniFileCredentials({
+        profile: flags.profile
+      });
+
+      AWS.config.update({ credentials });
     }
 
     const paramOverrides = [];
@@ -247,7 +277,8 @@ class Deploy extends Command {
         bucketName,
         flags["deploy-dir"],
         flags.template,
-        region
+        region,
+        flags.profile
       );
 
       cli.action.stop();
@@ -259,7 +290,8 @@ class Deploy extends Command {
       stackName,
       flags["deploy-dir"],
       paramOverrides,
-      region
+      region,
+      flags.profile
     );
 
     cli.action.stop();
@@ -272,6 +304,11 @@ Deploy.flags = {
   region: flags.string({
     char: "r",
     description: "Destination AWS region",
+    required: false
+  }),
+  profile: flags.string({
+    char: "p",
+    description: "Sets the AWS profile",
     required: false
   }),
   "deploy-dir": flags.string({
@@ -302,7 +339,7 @@ Deploy.flags = {
     default: "source-code"
   }),
   "override-parameters": flags.boolean({
-    char: "p",
+    char: "o",
     description:
       "Set this flag if you'd like to override this stack's parameters on deploy",
     required: false,

@@ -27,31 +27,32 @@ $ npx sam-helper deploy --help
 
 ## Deploy Config
 
-The `deploy-config` command allows a service to define stacks and their configuration in a local `stack-config.json` file.
+Deploys a SAM stack to AWS using `sam package` and `sam deploy`, but uses config data loaded from a JSON file instead of CLI prompts
 
-An example config file that defines a stack that supports three different regions:
+To use, first create a `stack-config.json` file in the root of your repository, e.g.:
 
 ```json
 {
+  "profile": "solve-dev-eric",
   "regions": {
     "eu-west-2": {
-      "bucket": "source-code-eu-west-2"
+      "bucket": "solve-dev-source-code-eu-west-2"
     },
-    "us-west-2": {
-      "bucket": "source-code-us-west-2"
-    },
-    "ap-southeast-2": {
-      "bucket": "source-code-ap-southeast-2"
+    "eu-west-1": {
+      "bucket": "solve-dev-source-code-eu-west-1"
     }
   },
   "secrets": {
-    "FunctionShield": {
+    "LogTesting/FunctionShield": {
       "token": "1234"
     }
   },
   "stacks": {
-    "rest-api": {
+    "log-test-2019-03-19": {
       "stage": "dev",
+      "parameterOverrides": {
+        "LogLevel": "DEBUG"
+      },
       "parameters": {
         "/Services/RestAPI/Config": {
           "dynamodb": {
@@ -65,10 +66,12 @@ An example config file that defines a stack that supports three different region
 }
 ```
 
-You can deploy the above `rest-api` stack in any of the above regions using the `deploy-config` command, like this:
+> **Note** As you can see above, this file may contain secrets. For that reason, make sure to add `stack-config.json` to your `.gitignore` file to avoid publishing the file to a remote repo.
+
+Then, to deploy, run `deploy-config` and pass in the stack name and the region to deploy to:
 
 ```bash
-$ npx sam-helper deploy-config -n rest-api -r us-west-2
+$ npx sam-helper deploy-config -n log-test-2019-03-19 -r eu-west-2
 ```
 
 ## Read Stream

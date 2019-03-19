@@ -27,9 +27,14 @@ const samPackage = async (
   bucketName,
   deployDir,
   templateFile,
-  dryRun
+  dryRun,
+  profile
 ) => {
-  const packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml  --region ${region}`;
+  let packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml  --region ${region}`;
+
+  if (profile) {
+    packageCommand += ` --profile ${profile}`;
+  }
 
   console.log(`Running ${packageCommand}`);
 
@@ -43,7 +48,8 @@ const samDeploy = async (
   stackName,
   deployDir,
   parameterOverrides,
-  dryRun
+  dryRun,
+  profile
 ) => {
   let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM --region ${region}`;
 
@@ -53,6 +59,10 @@ const samDeploy = async (
     }, "");
 
     deployCommand += ` --parameter-overrides ${parameterOverridesPart}`;
+  }
+
+  if (profile) {
+    deployCommand += ` --profile ${profile}`;
   }
 
   console.log(`Running ${deployCommand}`);
@@ -139,21 +149,6 @@ class DeployConfig extends Command {
 
     let region = flags.region || process.env["AWS_REGION"];
 
-    if (!region) {
-      const { stdout } = await exec(`aws configure get region`);
-      region = stdout.replace(/\n$/, "");
-    }
-
-    if (region) {
-      AWS.config.update({ region: region });
-    } else {
-      console.error(
-        "Cannot deploy because no AWS region specified. Please specify a region using the --region flag"
-      );
-
-      this.exit();
-    }
-
     const stackName = flags["stack-name"];
     const configFilePath = flags["config-file"];
 
@@ -169,6 +164,31 @@ class DeployConfig extends Command {
       );
 
       this.exit();
+    }
+
+    if (!region) {
+      const { stdout } = await exec(`aws configure get region`);
+      region = stdout.replace(/\n$/, "");
+    }
+
+    if (region) {
+      AWS.config.update({ region: region });
+    } else {
+      console.error(
+        "Cannot deploy because no AWS region specified. Please specify a region using the --region flag"
+      );
+
+      this.exit();
+    }
+
+    if (config.profile) {
+      console.log(`Using AWS profile ${config.profile}`);
+
+      const credentials = new AWS.SharedIniFileCredentials({
+        profile: config.profile
+      });
+
+      AWS.config.update({ credentials });
     }
 
     const regionConfig = config.regions[region];
@@ -309,7 +329,8 @@ class DeployConfig extends Command {
       bucketName,
       flags["deploy-dir"],
       flags.template,
-      flags["dry-run"]
+      flags["dry-run"],
+      config.profile
     );
 
     const paramOverridesConfig = stackConfig.parameterOverrides || {};
@@ -323,7 +344,8 @@ class DeployConfig extends Command {
       stackName,
       flags["deploy-dir"],
       paramOverrides,
-      flags["dry-run"]
+      flags["dry-run"],
+      config.profile
     );
   }
 }
