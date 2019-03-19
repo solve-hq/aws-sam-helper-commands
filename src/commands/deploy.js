@@ -74,7 +74,11 @@ class Deploy extends Command {
     let region = flags.region || process.env["AWS_REGION"];
 
     if (!region) {
-      const { stdout } = await exec(`aws configure get region`);
+      const getRegionCommand = flags.profile
+        ? `aws configure get region --profile ${flags.profile}`
+        : `aws configure get region`;
+
+      const { stdout } = await exec(getRegionCommand);
       region = stdout.replace(/\n$/, "");
     }
 

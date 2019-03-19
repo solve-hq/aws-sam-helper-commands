@@ -167,7 +167,11 @@ class DeployConfig extends Command {
     }
 
     if (!region) {
-      const { stdout } = await exec(`aws configure get region`);
+      const getRegionCommand = config.profile
+        ? `aws configure get region --profile ${config.profile}`
+        : `aws configure get region`;
+
+      const { stdout } = await exec(getRegionCommand);
       region = stdout.replace(/\n$/, "");
     }
 
