@@ -1,15 +1,18 @@
 const { Command, flags } = require("@oclif/command");
 const { cli } = require("cli-ux");
 
-const util = require("util");
-
-const exec = util.promisify(require("child_process").exec);
-
 const inquirer = require("inquirer");
 const AWS = require("aws-sdk");
 
 const YAML = require("yaml");
 const fs = require("fs");
+
+const {
+  samBuild,
+  samDeploy,
+  samPackage,
+  getConfigRegion
+} = require("../samCommands");
 
 const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
@@ -22,50 +25,6 @@ const loadTemplate = (deployDir, templateFile) => {
   return doc;
 };
 
-const samPackage = async (
-  bucketName,
-  deployDir,
-  templateFile,
-  region,
-  profile
-) => {
-  let packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml --region ${region}`;
-
-  if (profile) {
-    packageCommand += ` --profile ${profile}`;
-  }
-
-  console.log(`Running ${packageCommand}`);
-
-  return await exec(packageCommand);
-};
-
-const samDeploy = async (
-  stackName,
-  deployDir,
-  parameterOverrides,
-  region,
-  profile
-) => {
-  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM  --region ${region}`;
-
-  if (parameterOverrides.length > 0) {
-    const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
-      return `${cmd} ${p.Name}="${p.Value}"`;
-    }, "");
-
-    deployCommand += ` --parameter-overrides ${parameterOverridesPart}`;
-  }
-
-  if (profile) {
-    deployCommand += ` --profile ${profile}`;
-  }
-
-  console.log(`Running ${deployCommand}`);
-
-  return await exec(deployCommand);
-};
-
 class Deploy extends Command {
   async run() {
     // can get args as an object
@@ -74,12 +33,7 @@ class Deploy extends Command {
     let region = flags.region || process.env["AWS_REGION"];
 
     if (!region) {
-      const getRegionCommand = flags.profile
-        ? `aws configure get region --profile ${flags.profile}`
-        : `aws configure get region`;
-
-      const { stdout } = await exec(getRegionCommand);
-      region = stdout.replace(/\n$/, "");
+      region = await getConfigRegion(flags.profile);
     }
 
     if (region) {
@@ -204,6 +158,7 @@ class Deploy extends Command {
           !flags["stack-filter"] ||
           stack.StackName.match(new RegExp(flags["stack-filter"], "i"))
       )
+        .filter(stack => !stack.ParentId)
         .sort((a, b) => {
           return (
             (b.LastUpdatedTime || b.CreationTime) -
@@ -274,6 +229,14 @@ class Deploy extends Command {
       }
     ]);
 
+    if (!flags["skip-build"]) {
+      cli.action.start("Building the stack");
+
+      const buildResults = await samBuild(region, flags.profile);
+
+      cli.action.stop();
+    }
+
     if (packageResponse.shouldPackage) {
       cli.action.start("Packaging the stack");
 
@@ -288,6 +251,31 @@ class Deploy extends Command {
       cli.action.stop();
     }
 
+    const capabilityAnswers = await inquirer.prompt([
+      {
+        name: "hasIAMCapability",
+        message: "Deploy with CAPABILITY_IAM capability?",
+        type: "confirm",
+        default: true
+      },
+      {
+        name: "hasAutoExpandCapability",
+        message: "Deploy with CAPABILITY_AUTO_EXPAND capability?",
+        type: "confirm",
+        default: false
+      }
+    ]);
+
+    const capabilities = [];
+
+    if (capabilityAnswers.hasIAMCapability) {
+      capabilities.push("CAPABILITY_IAM");
+    }
+
+    if (capabilityAnswers.hasAutoExpandCapability) {
+      capabilities.push("CAPABILITY_AUTO_EXPAND");
+    }
+
     cli.action.start(`Deploying ${stackName}`);
 
     const deployResults = await samDeploy(
@@ -295,7 +283,8 @@ class Deploy extends Command {
       flags["deploy-dir"],
       paramOverrides,
       region,
-      flags.profile
+      flags.profile,
+      capabilities
     );
 
     cli.action.stop();
@@ -346,6 +335,11 @@ Deploy.flags = {
     char: "o",
     description:
       "Set this flag if you'd like to override this stack's parameters on deploy",
+    required: false,
+    default: false
+  }),
+  "skip-build": flags.boolean({
+    description: "Set this flag to skip the build step",
     required: false,
     default: false
   })

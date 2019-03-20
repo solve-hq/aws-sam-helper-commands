@@ -34,6 +34,7 @@ To use, first create a `stack-config.json` file in the root of your repository, 
 ```json
 {
   "profile": "solve-dev-eric",
+  "capabilities": ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"],
   "regions": {
     "eu-west-2": {
       "bucket": "solve-dev-source-code-eu-west-2"

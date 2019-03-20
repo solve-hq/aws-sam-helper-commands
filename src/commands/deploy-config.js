@@ -1,8 +1,5 @@
 const { Command, flags } = require("@oclif/command");
-
-const util = require("util");
-
-const exec = util.promisify(require("child_process").exec);
+const { cli } = require("cli-ux");
 
 const AWS = require("aws-sdk");
 
@@ -22,55 +19,12 @@ const loadTemplate = (deployDir, templateFile) => {
   return doc;
 };
 
-const samPackage = async (
-  region,
-  bucketName,
-  deployDir,
-  templateFile,
-  dryRun,
-  profile
-) => {
-  let packageCommand = `sam package --template-file ${deployDir}/${templateFile} --s3-bucket ${bucketName} --output-template-file ${deployDir}/packaged.yml  --region ${region}`;
-
-  if (profile) {
-    packageCommand += ` --profile ${profile}`;
-  }
-
-  console.log(`Running ${packageCommand}`);
-
-  if (!dryRun) {
-    return await exec(packageCommand);
-  }
-};
-
-const samDeploy = async (
-  region,
-  stackName,
-  deployDir,
-  parameterOverrides,
-  dryRun,
-  profile
-) => {
-  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --capabilities CAPABILITY_IAM --region ${region}`;
-
-  if (parameterOverrides.length > 0) {
-    const parameterOverridesPart = parameterOverrides.reduce((cmd, p) => {
-      return `${cmd} ${p.Name}="${p.Value}"`;
-    }, "");
-
-    deployCommand += ` --parameter-overrides ${parameterOverridesPart}`;
-  }
-
-  if (profile) {
-    deployCommand += ` --profile ${profile}`;
-  }
-
-  console.log(`Running ${deployCommand}`);
-
-  if (!dryRun) {
-    return await exec(deployCommand);
-  }
-};
+const {
+  samBuild,
+  samDeploy,
+  samPackage,
+  getConfigRegion
+} = require("../samCommands");
 
 const encodedValue = rawValue => {
   let result;
@@ -167,12 +121,7 @@ class DeployConfig extends Command {
     }
 
     if (!region) {
-      const getRegionCommand = config.profile
-        ? `aws configure get region --profile ${config.profile}`
-        : `aws configure get region`;
-
-      const { stdout } = await exec(getRegionCommand);
-      region = stdout.replace(/\n$/, "");
+      region = await getConfigRegion(config.profile);
     }
 
     if (region) {
@@ -326,16 +275,24 @@ class DeployConfig extends Command {
       await Promise.all(allSecrets).catch(console.error);
     }
 
-    console.log(`Deploying in ${region}...`);
+    cli.action.start("Building the stack");
 
-    const packageResults = await samPackage(
-      region,
+    await samBuild(region, config.profile);
+
+    cli.action.stop();
+
+    cli.action.start(`Packaging the stack`);
+
+    await samPackage(
       bucketName,
       flags["deploy-dir"],
       flags.template,
-      flags["dry-run"],
-      config.profile
+      region,
+      config.profile,
+      flags["dry-run"]
     );
+
+    cli.action.stop();
 
     const paramOverridesConfig = stackConfig.parameterOverrides || {};
 
@@ -343,14 +300,19 @@ class DeployConfig extends Command {
       return { Name, Value: paramOverridesConfig[Name] };
     });
 
-    const deployResults = await samDeploy(
-      region,
+    cli.action.start(`Deploying in ${region}`);
+
+    await samDeploy(
       stackName,
       flags["deploy-dir"],
       paramOverrides,
-      flags["dry-run"],
-      config.profile
+      region,
+      config.profile,
+      config.capabilities,
+      flags["dry-run"]
     );
+
+    cli.action.stop();
   }
 }
 
