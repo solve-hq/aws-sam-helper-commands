@@ -275,11 +275,13 @@ class DeployConfig extends Command {
       await Promise.all(allSecrets).catch(console.error);
     }
 
-    cli.action.start("Building the stack");
+    if (!flags["skip-build"]) {
+      cli.action.start("Building the stack");
 
-    await samBuild(region, config.profile);
+      await samBuild(region, config.profile);
 
-    cli.action.stop();
+      cli.action.stop();
+    }
 
     cli.action.start(`Packaging the stack`);
 
@@ -359,6 +361,11 @@ DeployConfig.flags = {
   }),
   "dry-run": flags.boolean({
     description: "View the output of the command without making any changes",
+    required: false,
+    default: false
+  }),
+  "skip-build": flags.boolean({
+    description: "Set this flag to skip the build step",
     required: false,
     default: false
   })
