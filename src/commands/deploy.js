@@ -7,6 +7,8 @@ const AWS = require("aws-sdk");
 const YAML = require("yaml");
 const fs = require("fs");
 
+const notifier = require("node-notifier");
+
 const {
   samBuild,
   samDeploy,
@@ -288,6 +290,11 @@ class Deploy extends Command {
     );
 
     cli.action.stop();
+
+    notifier.notify({
+      title: `Stack deployed!`,
+      message: `${stackName} was deployed to ${region}`
+    });
   }
 }
 

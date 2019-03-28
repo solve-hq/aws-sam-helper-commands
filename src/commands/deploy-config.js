@@ -8,6 +8,8 @@ const YAML = require("yaml");
 
 const isEqual = require("lodash.isequal");
 
+const notifier = require("node-notifier");
+
 const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
   console.warn = () => {};
@@ -315,6 +317,11 @@ class DeployConfig extends Command {
     );
 
     cli.action.stop();
+
+    notifier.notify({
+      title: `Stack deployed!`,
+      message: `${stackName} was deployed to ${region}`
+    });
   }
 }
 
