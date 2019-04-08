@@ -1,7 +1,7 @@
 {
   "name": "aws-sam-helper-commands",
   "description": "A CLI tool to make certain common AWS SAM commands easier to use",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "author": "Eric Allam",
   "bin": {
     "sam-helper": "./bin/run"
