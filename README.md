@@ -20,11 +20,15 @@ To use, first create a `stack-config.json` file in the root of your repository, 
   "namespace": "Services",
   "service": "FeedApi",
   "name": "feed-api",
-  "profile": "dev",
   "capabilities": ["CAPABILITY_IAM"],
-  "regions": {
-    "eu-west-2": {
-      "bucket": "solve-dev-source-code-eu-west-2"
+  "stages": {
+    "dev": {
+      "profile": "dev",
+      "regions": {
+        "eu-west-2": {
+          "bucket": "solve-dev-source-code-eu-west-2"
+        }
+      }
     }
   },
   "secrets": {

@@ -111,8 +111,18 @@ class Deploy extends Command {
 
     const stackName = `${config.name}-${flags.stage}`;
 
+    const stageConfig = config.stages[flags.stage];
+
+    if (!stageConfig) {
+      console.error(
+        `No stage configured in ${flags["config-file"]} for ${flags.stage}`
+      );
+
+      this.exit();
+    }
+
     if (!region) {
-      region = await getConfigRegion(config.profile);
+      region = await getConfigRegion(stageConfig.profile);
     }
 
     if (region) {
@@ -125,17 +135,17 @@ class Deploy extends Command {
       this.exit();
     }
 
-    if (config.profile) {
-      console.log(`Using AWS profile ${config.profile}`);
+    if (stageConfig.profile) {
+      console.log(`Using AWS profile ${stageConfig.profile}`);
 
       const credentials = new AWS.SharedIniFileCredentials({
-        profile: config.profile
+        profile: stageConfig.profile
       });
 
       AWS.config.update({ credentials });
     }
 
-    const regionConfig = config.regions[region];
+    const regionConfig = stageConfig.regions[region];
 
     if (!regionConfig) {
       console.error(
@@ -274,7 +284,7 @@ class Deploy extends Command {
     if (!flags["skip-build"]) {
       cli.action.start("Building the stack");
 
-      await samBuild(region, config.profile);
+      await samBuild(region, stageConfig.profile);
 
       cli.action.stop();
     }
@@ -286,7 +296,7 @@ class Deploy extends Command {
       flags["deploy-dir"],
       flags.template,
       region,
-      config.profile,
+      stageConfig.profile,
       flags["dry-run"]
     );
 
@@ -307,7 +317,7 @@ class Deploy extends Command {
       flags["deploy-dir"],
       paramOverrides,
       region,
-      config.profile,
+      stageConfig.profile,
       config.capabilities,
       flags["dry-run"]
     );
