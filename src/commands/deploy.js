@@ -1,20 +1,14 @@
 const { Command, flags } = require("@oclif/command");
 const { cli } = require("cli-ux");
 
-const inquirer = require("inquirer");
 const AWS = require("aws-sdk");
 
-const YAML = require("yaml");
 const fs = require("fs");
+const YAML = require("yaml");
+
+const isEqual = require("lodash.isequal");
 
 const notifier = require("node-notifier");
-
-const {
-  samBuild,
-  samDeploy,
-  samPackage,
-  getConfigRegion
-} = require("../samCommands");
 
 const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
@@ -27,6 +21,83 @@ const loadTemplate = (deployDir, templateFile) => {
   return doc;
 };
 
+const {
+  samBuild,
+  samDeploy,
+  samPackage,
+  getConfigRegion
+} = require("../samCommands");
+
+const encodedValue = rawValue => {
+  let result;
+
+  if (typeof rawValue == "string") {
+    result = rawValue;
+  } else {
+    result = JSON.stringify(rawValue);
+  }
+
+  return result;
+};
+
+const configureParam = async (ssm, Name, rawValue, dryRun, override) => {
+  try {
+    const existingParam = await ssm.getParameter({ Name }).promise();
+
+    if (encodedValue(rawValue) !== existingParam.Parameter.Value) {
+      console.log(
+        `Parameter drift detected on ${Name}. Expected Value to be ${encodedValue(
+          rawValue
+        )} but instead it is ${existingParam.Parameter.Value}`
+      );
+
+      if (override) {
+        let Value;
+
+        if (typeof rawValue == "string") {
+          Value = rawValue;
+        } else {
+          Value = JSON.stringify(rawValue);
+        }
+
+        console.log(`Overriding parameter ${Name} with value ${Value}`);
+
+        if (!dryRun) {
+          return ssm
+            .putParameter({
+              Name,
+              Value,
+              Type: "String",
+              Overwrite: true
+            })
+            .promise();
+        }
+      }
+    }
+  } catch (error) {
+    let Value;
+
+    if (typeof rawValue == "string") {
+      Value = rawValue;
+    } else {
+      Value = JSON.stringify(rawValue);
+    }
+
+    console.log(`Putting parameter ${Name} with value ${Value}`);
+
+    if (!dryRun) {
+      return ssm
+        .putParameter({
+          Name,
+          Value,
+          Type: "String",
+          Overwrite: true
+        })
+        .promise();
+    }
+  }
+};
+
 class Deploy extends Command {
   async run() {
     // can get args as an object
@@ -34,13 +105,17 @@ class Deploy extends Command {
 
     let region = flags.region || process.env["AWS_REGION"];
 
+    const configFileContents = fs.readFileSync(flags["config-file"], "utf8");
+
+    const config = JSON.parse(configFileContents);
+
+    const stackName = `${config.name}-${flags.stage}`;
+
     if (!region) {
-      region = await getConfigRegion(flags.profile);
+      region = await getConfigRegion(config.profile);
     }
 
     if (region) {
-      console.log(`Deploying in ${region}...`);
-
       AWS.config.update({ region: region });
     } else {
       console.error(
@@ -50,159 +125,47 @@ class Deploy extends Command {
       this.exit();
     }
 
-    if (flags.profile) {
-      console.log(`Using AWS profile ${flags.profile}`);
+    if (config.profile) {
+      console.log(`Using AWS profile ${config.profile}`);
 
       const credentials = new AWS.SharedIniFileCredentials({
-        profile: flags.profile
+        profile: config.profile
       });
 
       AWS.config.update({ credentials });
     }
 
-    const paramOverrides = [];
+    const regionConfig = config.regions[region];
 
-    if (flags["override-parameters"]) {
-      const doc = loadTemplate(flags["deploy-dir"], flags.template);
+    if (!regionConfig) {
+      console.error(
+        `Cannot deploy because region config for ${region} not found`
+      );
 
-      const ssm = new AWS.SSM();
-
-      const parameterKeys = Object.keys(doc.Parameters);
-
-      for (let index = 0; index < parameterKeys.length; index++) {
-        const parameterKey = parameterKeys[index];
-        const parameter = doc.Parameters[parameterKey];
-
-        if (parameter.Type.match(/AWS::SSM::Parameter::Value/)) {
-          const searchPath = parameter.Default.split("/")
-            .slice(0, 3)
-            .join("/");
-
-          const parameterChoicesData = await ssm
-            .getParametersByPath({
-              Path: searchPath,
-              Recursive: true
-            })
-            .promise();
-
-          const parameterOptions = parameterChoicesData.Parameters.map(
-            param => param.Name
-          );
-
-          let paramResponse = await inquirer.prompt([
-            {
-              name: "paramOverride",
-              message: `Override "${parameterKey}" param value`,
-              type: "list",
-              choices: parameterOptions,
-              default: parameter.Default
-            }
-          ]);
-
-          paramOverrides.push({
-            Value: paramResponse.paramOverride,
-            Name: parameterKey
-          });
-        } else {
-          let paramResponse = await inquirer.prompt([
-            {
-              name: "paramOverride",
-              message: `Override "${parameterKey}" param value:`,
-              type: "input",
-              default: parameter.Default
-            }
-          ]);
-
-          paramOverrides.push({
-            Value: paramResponse.paramOverride,
-            Name: parameterKey
-          });
-        }
-      }
+      this.exit();
     }
 
-    const cloudFormation = new AWS.CloudFormation();
+    const bucketName = regionConfig.bucket;
 
-    let createOrUpdateStackResponse = await inquirer.prompt([
-      {
-        name: "createNewStack",
-        message: "Create a new stack?",
-        type: "confirm",
-        default: false
-      }
-    ]);
+    if (!bucketName) {
+      console.error(
+        `Cannot deploy because region config ${region} does not specify a source code bucket name`
+      );
 
-    var stackName = null;
-
-    if (createOrUpdateStackResponse.createNewStack) {
-      let newStackNameResponse = await inquirer.prompt([
-        {
-          name: "stackName",
-          message: "Choose a name for the new stack",
-          type: "input"
-        }
-      ]);
-
-      stackName = newStackNameResponse.stackName;
-    } else {
-      let stacks = await cloudFormation
-        .listStacks({
-          StackStatusFilter: [
-            "CREATE_COMPLETE",
-            "UPDATE_COMPLETE",
-            "UPDATE_ROLLBACK_COMPLETE"
-          ]
-        })
-        .promise();
-
-      const stackOptions = stacks.StackSummaries.filter(
-        stack =>
-          !flags["stack-filter"] ||
-          stack.StackName.match(new RegExp(flags["stack-filter"], "i"))
-      )
-        .filter(stack => !stack.ParentId)
-        .sort((a, b) => {
-          return (
-            (b.LastUpdatedTime || b.CreationTime) -
-            (a.LastUpdatedTime || a.CreationTime)
-          );
-        })
-        .map(stack => {
-          return { name: stack.StackName };
-        });
-
-      let existingStackResponse = await inquirer.prompt([
-        {
-          name: "stackName",
-          message: `select a stack in ${region}`,
-          type: "list",
-          choices: stackOptions
-        }
-      ]);
-
-      stackName = existingStackResponse.stackName;
+      this.exit();
     }
 
     const s3 = new AWS.S3();
 
-    const bucketsResponse = await s3.listBuckets().promise();
+    try {
+      await s3.headBucket({ Bucket: bucketName }).promise();
+    } catch (error) {
+      console.error(
+        `Cannot deploy because bucket ${bucketName} does not exist`
+      );
 
-    const bucketOptions = bucketsResponse.Buckets.filter(bucket =>
-      bucket.Name.match(new RegExp(flags["bucket-filter"], "i"))
-    ).map(bucket => {
-      return { name: bucket.Name };
-    });
-
-    let bucketResponse = await inquirer.prompt([
-      {
-        name: "bucketName",
-        message: `select an s3 source-code bucket in ${region}`,
-        type: "list",
-        choices: bucketOptions
-      }
-    ]);
-
-    const bucketName = bucketResponse.bucketName;
+      this.exit();
+    }
 
     const bucketLocationResponse = await s3
       .getBucketLocation({ Bucket: bucketName })
@@ -215,78 +178,138 @@ class Deploy extends Command {
 
     if (!bucketInRegion) {
       console.error(
-        `Bucket ${bucketName} must be in the ${region} region, instead it is in ${
+        `Cannot deploy in ${region} to bucket ${bucketName} because it is located in ${
           bucketLocationResponse.LocationConstraint
         }`
       );
+
       this.exit();
     }
 
-    let packageResponse = await inquirer.prompt([
-      {
-        name: "shouldPackage",
-        message: "Re-package with sam package?",
-        type: "confirm",
-        default: true
+    const ssm = new AWS.SSM({ region: region });
+
+    if (config.parameters) {
+      const parameterOperations = Object.keys(config.parameters).map(Name =>
+        configureParam(
+          ssm,
+          Name,
+          config.parameters[Name],
+          flags["dry-run"],
+          flags["override-parameters"]
+        )
+      );
+
+      await Promise.all(parameterOperations);
+    }
+
+    const doc = loadTemplate(flags["deploy-dir"], flags.template);
+
+    const parameterKeys = Object.keys(doc.Parameters || {});
+
+    for (let index = 0; index < parameterKeys.length; index++) {
+      const parameterKey = parameterKeys[index];
+      const parameter = doc.Parameters[parameterKey];
+
+      if (parameter.Type.match(/AWS::SSM::Parameter::Value/)) {
+        try {
+          const existingParam = await ssm
+            .getParameter({ Name: parameter.Default })
+            .promise();
+        } catch (error) {
+          console.error(
+            `Cannot deploy because stack depends on availability of ${
+              parameter.Default
+            } parameter. Create it in Systems Manager Parameter Store and then try again.`
+          );
+
+          this.exit();
+        }
       }
-    ]);
+    }
+
+    if (config.secrets) {
+      const buildSecretId = secretName =>
+        `/${config.namespace}/${config.service}${
+          flags.stage === "test" ? "/test" : ""
+        }/${secretName}`;
+
+      const secretsManager = new AWS.SecretsManager({ region: region });
+
+      const allSecrets = Object.keys(config.secrets).map(async name => {
+        const secretValue = config.secrets[name];
+        const SecretId = buildSecretId(name);
+
+        try {
+          const existingSecret = await secretsManager
+            .getSecretValue({ SecretId })
+            .promise();
+
+          const existingSecretValue = JSON.parse(existingSecret.SecretString);
+
+          if (!isEqual(existingSecretValue, secretValue)) {
+            console.log(`Updating SecretString value for ${SecretId}...`);
+
+            return secretsManager
+              .putSecretValue({
+                SecretId,
+                SecretString: JSON.stringify(secretValue)
+              })
+              .promise();
+          }
+        } catch (error) {
+          console.log(`Creating SecretString ${SecretId}...`);
+
+          return secretsManager
+            .createSecret({
+              Name: SecretId,
+              SecretString: JSON.stringify(secretValue)
+            })
+            .promise();
+        }
+      });
+
+      await Promise.all(allSecrets).catch(console.error);
+    }
 
     if (!flags["skip-build"]) {
       cli.action.start("Building the stack");
 
-      const buildResults = await samBuild(region, flags.profile);
+      await samBuild(region, config.profile);
 
       cli.action.stop();
     }
 
-    if (packageResponse.shouldPackage) {
-      cli.action.start("Packaging the stack");
+    cli.action.start(`Packaging the stack`);
 
-      const packageResults = await samPackage(
-        bucketName,
-        flags["deploy-dir"],
-        flags.template,
-        region,
-        flags.profile
-      );
+    await samPackage(
+      bucketName,
+      flags["deploy-dir"],
+      flags.template,
+      region,
+      config.profile,
+      flags["dry-run"]
+    );
 
-      cli.action.stop();
-    }
+    cli.action.stop();
 
-    const capabilityAnswers = await inquirer.prompt([
-      {
-        name: "hasIAMCapability",
-        message: "Deploy with CAPABILITY_IAM capability?",
-        type: "confirm",
-        default: true
-      },
-      {
-        name: "hasAutoExpandCapability",
-        message: "Deploy with CAPABILITY_AUTO_EXPAND capability?",
-        type: "confirm",
-        default: false
-      }
-    ]);
+    const paramOverridesConfig = config.parameterOverrides || {};
 
-    const capabilities = [];
+    const paramOverrides = Object.keys(paramOverridesConfig).map(Name => {
+      return { Name, Value: paramOverridesConfig[Name] };
+    });
 
-    if (capabilityAnswers.hasIAMCapability) {
-      capabilities.push("CAPABILITY_IAM");
-    }
+    paramOverrides.push({ Name: "Stage", Value: flags.stage });
 
-    if (capabilityAnswers.hasAutoExpandCapability) {
-      capabilities.push("CAPABILITY_AUTO_EXPAND");
-    }
+    cli.action.start(`Deploying in ${region}`);
 
-    cli.action.start(`Deploying ${stackName}`);
-
-    const deployResults = await samDeploy(
+    await samDeploy(
       stackName,
       flags["deploy-dir"],
       paramOverrides,
       region,
-      flags.profile,
-      capabilities
+      config.profile,
+      config.capabilities,
+      flags["dry-run"]
     );
 
     cli.action.stop();
@@ -298,7 +321,8 @@ class Deploy extends Command {
   }
 }
 
-Deploy.description = "Deploys this SAM stack to AWS";
+Deploy.description =
+  "Deploys this SAM stack to AWS using the configuration file stack-config.json";
 
 Deploy.flags = {
   region: flags.string({
@@ -306,10 +330,17 @@ Deploy.flags = {
     description: "Destination AWS region",
     required: false
   }),
-  profile: flags.string({
-    char: "p",
-    description: "Sets the AWS profile",
-    required: false
+  "config-file": flags.string({
+    char: "c",
+    description: "Path to the stack-config.json file",
+    required: false,
+    default: "./stack-config.json"
+  }),
+  stage: flags.string({
+    char: "s",
+    description: "The stage to deploy",
+    required: true,
+    default: "dev"
   }),
   "deploy-dir": flags.string({
     char: "d",
@@ -325,23 +356,15 @@ Deploy.flags = {
     required: false,
     default: "template.yaml"
   }),
-  "stack-filter": flags.string({
-    char: "f",
-    description:
-      "A pattern to filter stacks when displaying which stack to deploy",
-    required: false
-  }),
-  "bucket-filter": flags.string({
-    char: "b",
-    description:
-      "A pattern to filter s3 buckets when choosing the source code s3 bucket",
-    required: false,
-    default: "source-code"
-  }),
   "override-parameters": flags.boolean({
-    char: "o",
+    char: "p",
     description:
-      "Set this flag if you'd like to override this stack's parameters on deploy",
+      "Override the parameters in Param Store with the parameters defined in the stack config file",
+    required: false,
+    default: false
+  }),
+  "dry-run": flags.boolean({
+    description: "View the output of the command without making any changes",
     required: false,
     default: false
   }),

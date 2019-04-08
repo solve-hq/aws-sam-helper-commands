@@ -11,57 +11,26 @@ A CLI tool to make certain common AWS SAM commands easier to use
 
 ## Deploy
 
-Deploys a SAM stack to AWS using `sam package` and `sam deploy`.
-
-Examples:
-
-```bash
-$ npx sam-helper deploy
-```
-
-Lookup help using the `--help` flag like so:
-
-```bash
-$ npx sam-helper deploy --help
-```
-
-## Deploy Config
-
-Deploys a SAM stack to AWS using `sam package` and `sam deploy`, but uses config data loaded from a JSON file instead of CLI prompts
+Deploys a SAM stack to AWS using the stack definition in `stack-config.json`.
 
 To use, first create a `stack-config.json` file in the root of your repository, e.g.:
 
 ```json
 {
-  "profile": "solve-dev-eric",
-  "capabilities": ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"],
+  "namespace": "Services",
+  "service": "FeedApi",
+  "name": "feed-api",
+  "profile": "dev",
+  "capabilities": ["CAPABILITY_IAM"],
   "regions": {
     "eu-west-2": {
       "bucket": "solve-dev-source-code-eu-west-2"
-    },
-    "eu-west-1": {
-      "bucket": "solve-dev-source-code-eu-west-1"
     }
   },
   "secrets": {
-    "LogTesting/FunctionShield": {
-      "token": "1234"
-    }
-  },
-  "stacks": {
-    "log-test-2019-03-19": {
-      "stage": "dev",
-      "parameterOverrides": {
-        "LogLevel": "DEBUG"
-      },
-      "parameters": {
-        "/Services/RestAPI/Config": {
-          "dynamodb": {
-            "params": { "TableName": "rest-api-table" }
-          },
-          "logLevel": "DEBUG"
-        }
-      }
+    "FeatureFlagService": {
+      "token": "api-1234",
+      "projectKey": "app"
     }
   }
 }
@@ -69,18 +38,16 @@ To use, first create a `stack-config.json` file in the root of your repository, 
 
 > **Note** As you can see above, this file may contain secrets. For that reason, make sure to add `stack-config.json` to your `.gitignore` file to avoid publishing the file to a remote repo.
 
-Then, to deploy, run `deploy-config` and pass in the stack name and the region to deploy to:
+Then, to deploy, run `deploy` and pass in the stage name and the region to deploy to:
 
 ```bash
-$ npx sam-helper deploy-config -n log-test-2019-03-19 -r eu-west-2
+$ npx sam-helper deploy --stage dev --region eu-west-2
 ```
 
-## Read Stream
+The above command will deploy a stack named `feed-api-dev` and will make sure the `/Services/FeedApi/FeatureFlagService` secret exists, if not it will be created.
 
-A very simple DynamoDB stream consumer that reads from all shards and prints events to STDOUT
-
-Lookup help using the `--help` flag like so:
+You can skip running `sam build` by passing the skip-build flag:
 
 ```bash
-$ npx sam-helper read-stream --help
+$ npx sam-helper deploy --stage dev --region eu-west-2 --skip-build
 ```
