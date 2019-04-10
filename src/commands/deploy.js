@@ -212,6 +212,14 @@ class Deploy extends Command {
       await Promise.all(parameterOperations);
     }
 
+    if (!flags["skip-build"]) {
+      cli.action.start("Building the stack");
+
+      await samBuild(region, stageConfig.profile);
+
+      cli.action.stop();
+    }
+
     const doc = loadTemplate(flags["deploy-dir"], flags.template);
 
     const parameterKeys = Object.keys(doc.Parameters || {});
@@ -279,14 +287,6 @@ class Deploy extends Command {
       });
 
       await Promise.all(allSecrets).catch(console.error);
-    }
-
-    if (!flags["skip-build"]) {
-      cli.action.start("Building the stack");
-
-      await samBuild(region, stageConfig.profile);
-
-      cli.action.stop();
     }
 
     cli.action.start(`Packaging the stack`);
