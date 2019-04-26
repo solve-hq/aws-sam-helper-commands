@@ -13,12 +13,18 @@ const notifier = require("node-notifier");
 const loadTemplate = (deployDir, templateFile) => {
   const warn = console.warn;
   console.warn = () => {};
-  const doc = YAML.parse(
-    fs.readFileSync(`${deployDir}/${templateFile}`, "utf8")
-  );
-  console.warn = warn;
 
-  return doc;
+  try {
+    const doc = YAML.parse(
+      fs.readFileSync(`${deployDir}/${templateFile}`, "utf8")
+    );
+    console.warn = warn;
+
+    return doc;
+  } catch (err) {
+    console.log(err.Error);
+    return {};
+  }
 };
 
 const {
@@ -212,7 +218,7 @@ class Deploy extends Command {
       await Promise.all(parameterOperations);
     }
 
-    if (!flags["skip-build"]) {
+    if (!flags["skip-build"] && !flags["resources-only"]) {
       cli.action.start("Building the stack");
 
       await samBuild(region, stageConfig.profile);
@@ -245,7 +251,7 @@ class Deploy extends Command {
       }
     }
 
-    if (config.secrets) {
+    if (stageConfig.secrets) {
       const buildSecretId = secretName =>
         `/${config.namespace}/${config.service}${
           flags.stage === "test" ? "/test" : ""
@@ -253,8 +259,8 @@ class Deploy extends Command {
 
       const secretsManager = new AWS.SecretsManager({ region: region });
 
-      const allSecrets = Object.keys(config.secrets).map(async name => {
-        const secretValue = config.secrets[name];
+      const allSecrets = Object.keys(stageConfig.secrets).map(async name => {
+        const secretValue = stageConfig.secrets[name];
         const SecretId = buildSecretId(name);
 
         try {
@@ -289,45 +295,47 @@ class Deploy extends Command {
       await Promise.all(allSecrets).catch(console.error);
     }
 
-    cli.action.start(`Packaging the stack`);
+    if (!flags["resources-only"]) {
+      cli.action.start(`Packaging the stack`);
 
-    await samPackage(
-      bucketName,
-      flags["deploy-dir"],
-      flags.template,
-      region,
-      stageConfig.profile,
-      flags["dry-run"]
-    );
+      await samPackage(
+        bucketName,
+        flags["deploy-dir"],
+        flags.template,
+        region,
+        stageConfig.profile,
+        flags["dry-run"]
+      );
 
-    cli.action.stop();
+      cli.action.stop();
 
-    const paramOverridesConfig = config.parameterOverrides || {};
+      const paramOverridesConfig = config.parameterOverrides || {};
 
-    const paramOverrides = Object.keys(paramOverridesConfig).map(Name => {
-      return { Name, Value: paramOverridesConfig[Name] };
-    });
+      const paramOverrides = Object.keys(paramOverridesConfig).map(Name => {
+        return { Name, Value: paramOverridesConfig[Name] };
+      });
 
-    paramOverrides.push({ Name: "Stage", Value: flags.stage });
+      paramOverrides.push({ Name: "Stage", Value: flags.stage });
 
-    cli.action.start(`Deploying in ${region}`);
+      cli.action.start(`Deploying in ${region}`);
 
-    await samDeploy(
-      stackName,
-      flags["deploy-dir"],
-      paramOverrides,
-      region,
-      stageConfig.profile,
-      config.capabilities,
-      flags["dry-run"]
-    );
+      await samDeploy(
+        stackName,
+        flags["deploy-dir"],
+        paramOverrides,
+        region,
+        stageConfig.profile,
+        config.capabilities,
+        flags["dry-run"]
+      );
 
-    cli.action.stop();
+      cli.action.stop();
 
-    notifier.notify({
-      title: `Stack deployed!`,
-      message: `${stackName} was deployed to ${region}`
-    });
+      notifier.notify({
+        title: `Stack deployed!`,
+        message: `${stackName} was deployed to ${region}`
+      });
+    }
   }
 }
 
@@ -380,6 +388,11 @@ Deploy.flags = {
   }),
   "skip-build": flags.boolean({
     description: "Set this flag to skip the build step",
+    required: false,
+    default: false
+  }),
+  "resources-only": flags.boolean({
+    description: "Set this flag to true to only create the secrets and params",
     required: false,
     default: false
   })
