@@ -7,6 +7,7 @@ const fs = require("fs");
 const YAML = require("yaml");
 
 const isEqual = require("lodash.isequal");
+const merge = require("lodash.merge");
 
 const notifier = require("node-notifier");
 
@@ -309,7 +310,11 @@ class Deploy extends Command {
 
       cli.action.stop();
 
-      const paramOverridesConfig = config.parameterOverrides || {};
+      const paramOverridesConfig = merge(
+        {},
+        config.parameterOverrides || {},
+        stageConfig.paramOverrides || {}
+      );
 
       const paramOverrides = Object.keys(paramOverridesConfig).map(Name => {
         return { Name, Value: paramOverridesConfig[Name] };
