@@ -30,10 +30,11 @@ const samDeploy = async (
   parameterOverrides,
   region,
   profile,
+  bucketName,
   capabilities = [],
   dryRun = false
 ) => {
-  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --stack-name ${stackName} --region ${region}`;
+  let deployCommand = `sam deploy --template-file ${deployDir}/packaged.yml --s3-bucket ${bucketName} --stack-name ${stackName} --region ${region}`;
 
   if (capabilities) {
     deployCommand += ` --capabilities ${capabilities.join(" ")}`;

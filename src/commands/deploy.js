@@ -330,6 +330,7 @@ class Deploy extends Command {
         paramOverrides,
         region,
         stageConfig.profile,
+        bucketName,
         config.capabilities,
         flags["dry-run"]
       );
