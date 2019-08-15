@@ -12,6 +12,7 @@ A CLI tool to make certain common AWS SAM commands easier to use
 TODO 
 
 `gem install aws_sam_yarn_builder`
+`gem install bundler`
 
 # Commands
 
