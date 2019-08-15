@@ -7,6 +7,12 @@ A CLI tool to make certain common AWS SAM commands easier to use
 [![Downloads/week](https://img.shields.io/npm/dw/aws-sam-helper-commands.svg)](https://npmjs.org/package/aws-sam-helper-commands)
 [![License](https://img.shields.io/npm/l/aws-sam-helper-commands.svg)](https://github.com/solve-hq/solve-hq/aws-sam-helper-commands/blob/master/package.json)
 
+# Getting Started
+
+TODO 
+
+`gem install aws_sam_yarn_builder`
+
 # Commands
 
 ## Deploy
