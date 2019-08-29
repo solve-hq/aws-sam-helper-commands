@@ -195,9 +195,7 @@ class Deploy extends Command {
 
     if (!bucketInRegion) {
       console.error(
-        `Cannot deploy in ${region} to bucket ${bucketName} because it is located in ${
-          bucketLocationResponse.LocationConstraint
-        }`
+        `Cannot deploy in ${region} to bucket ${bucketName} because it is located in ${bucketLocationResponse.LocationConstraint}`
       );
 
       this.exit();
@@ -242,9 +240,7 @@ class Deploy extends Command {
             .promise();
         } catch (error) {
           console.error(
-            `Cannot deploy because stack depends on availability of ${
-              parameter.Default
-            } parameter. Create it in Systems Manager Parameter Store and then try again.`
+            `Cannot deploy because stack depends on availability of ${parameter.Default} parameter. Create it in Systems Manager Parameter Store and then try again.`
           );
 
           this.exit();
@@ -395,7 +391,7 @@ Deploy.flags = {
   "skip-build": flags.boolean({
     description: "Set this flag to skip the build step",
     required: false,
-    default: false
+    default: true
   }),
   "resources-only": flags.boolean({
     description: "Set this flag to true to only create the secrets and params",
