@@ -17,7 +17,7 @@
     "lodash.isequal": "^4.5.0",
     "lodash.merge": "^4.6.1",
     "lodash.pick": "^4.4.0",
-    "node-notifier": "^5.4.0",
+    "node-notifier": "^8.0.1",
     "yaml": "^1.1.0"
   },
   "devDependencies": {
